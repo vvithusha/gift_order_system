@@ -1,0 +1,31 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Login</title><link rel="stylesheet" href="/style.css"></head><body>
+<header class="top"></header>
+<main><div class="auth panel">
+  <div class="tabs"><button id="tLogin" class="on">Login</button><button id="tReg">Register</button></div>
+  <form id="f" autocomplete="on">
+    <div id="regOnly" style="display:none"><label>Full Name <i>*</i></label><input id="rname" maxlength="60">
+      <label>Phone</label><input id="phone" maxlength="20"></div>
+    <label>Email <i>*</i></label><input id="email" type="email">
+    <label>Password <i>*</i></label><input id="pw" type="password">
+    <div class="err" id="err"></div>
+    <button class="btn" style="width:100%;margin-top:16px" id="go">Login</button>
+  </form></div></main>
+<script src="/app.js"></script>
+<script>
+renderHeader("login");
+let mode = "login";
+const next = new URLSearchParams(location.search).get("next") || "/";
+const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/";
+function setMode(m) { mode = m;
+  tLogin.className = m === "login" ? "on" : ""; tReg.className = m === "reg" ? "on" : "";
+  regOnly.style.display = m === "reg" ? "block" : "none"; go.textContent = m === "reg" ? "Create Account" : "Login"; err.style.display = "none"; }
+tLogin.onclick = () => setMode("login"); tReg.onclick = () => setMode("reg");
+f.onsubmit = async e => { e.preventDefault(); err.style.display = "none"; go.disabled = true;
+  try {
+    if (mode === "reg") { await post("/api/register", {name: rname.value, phone: phone.value, email: email.value, password: pw.value}); }
+    const u = await post("/api/login", {email: email.value, password: pw.value});
+    location.href = u.role === "admin" ? "/admin.html" : safeNext;
+  } catch (x) { err.textContent = x.message; err.style.display = "block"; }
+  go.disabled = false; };
+</script></body></html>

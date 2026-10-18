@@ -1,0 +1,89 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin</title><link rel="stylesheet" href="/style.css"></head><body>
+<header class="top"></header>
+<div class="admin">
+  <aside class="side"><a data-t="dash" class="on">📊 Dashboard</a><a data-t="prod">🛍️ Manage Products</a><a data-t="ord">📋 View Orders</a><a data-t="rep">📈 Sales Report</a></aside>
+  <div class="content">
+    <section id="dash"><div class="stats">
+      <div class="stat s1">Total Orders<b id="stOrders">–</b></div><div class="stat s2">Total Sales<b id="stSales">–</b></div><div class="stat s3">Customers<b id="stCust">–</b></div></div>
+      <h3>Recent Orders</h3><div class="panel" style="overflow-x:auto" id="recent"></div>
+      <h3>Popular Gifts</h3><div class="panel"><div class="pop" id="popular"></div></div></section>
+    <section id="prod" hidden><h3>Manage Products</h3>
+      <div class="panel"><div class="row" style="gap:10px"><div><label>Name</label><input id="pn" maxlength="60"></div>
+        <div><label>Price (Rs.)</label><input id="pp" inputmode="numeric"></div></div>
+        <div class="row" style="gap:10px"><div><label>Emoji icon</label><input id="pe" value="🎁" maxlength="4"></div>
+        <div><label>Description</label><input id="pd" maxlength="120"></div></div>
+        <div class="err" id="perr"></div><button class="btn" style="margin-top:14px" id="addP">Add Product</button></div>
+      <div class="panel" style="overflow-x:auto" id="plist"></div></section>
+    <section id="ord" hidden><h3>All Orders</h3><div class="panel" style="overflow-x:auto" id="orders"></div></section>
+    <section id="rep" hidden><h3>Sales Report</h3>
+      <div class="panel"><select id="period" style="width:auto"><option value="month">This Month</option><option value="week">Last 7 Days</option><option value="today">Today</option><option value="all">All Time</option></select>
+        <div style="margin-top:14px;font-size:14px">Total Sales: <b id="rSales" style="font-size:24px"></b> &nbsp; from <b id="rCount"></b> orders (cancelled excluded)</div></div>
+      <div class="panel" style="overflow-x:auto" id="rtable"></div></section>
+  </div>
+</div>
+<script src="/app.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const STATUSES = ["Pending", "Processing", "Shipped", "Delivered", "Cancelled"];
+let orders = [];
+
+document.querySelectorAll(".side a").forEach(a => a.onclick = () => {
+  document.querySelectorAll(".side a").forEach(x => x.classList.toggle("on", x === a));
+  ["dash", "prod", "ord", "rep"].forEach(t => $(t).hidden = t !== a.dataset.t);
+  load(a.dataset.t);
+});
+
+const statusSel = o => `<select data-id="${o.id}" class="stSel" style="width:auto;padding:5px">${STATUSES.map(s => `<option ${s === o.status ? "selected" : ""}>${s}</option>`).join("")}</select>`;
+function wireStatus(root) { root.querySelectorAll(".stSel").forEach(s => s.onchange = async () => {
+  try { await post(`/api/admin/orders/${s.dataset.id}/status`, {status: s.value}, "PUT"); toast("Order status updated"); load(currentTab()); }
+  catch (e) { toast(e.message); } }); }
+const currentTab = () => document.querySelector(".side a.on").dataset.t;
+
+function ordersTable(list, full) {
+  if (!list.length) return '<div class="empty">No orders yet.</div>';
+  return `<table><tr><th>Order ID</th><th>Customer</th>${full ? "<th>Gift</th><th>Print / Design</th><th>Photo</th><th>Contact</th><th>Address</th>" : ""}<th>Total</th><th>Status</th><th>Action</th></tr>` +
+    list.map(o => `<tr><td>#${String(o.id).padStart(3, "0")}</td><td>${esc(o.full_name)}</td>
+    ${full ? `<td>${esc(o.product_name)} × ${o.quantity}</td><td>${esc(o.message)}<br><small>${esc(o.design)}</small></td>
+      <td>${o.photo ? `<a href="/uploads/${esc(o.photo)}" target="_blank"><img class="photo" src="/uploads/${esc(o.photo)}"></a>` : "–"}</td>
+      <td>${esc(o.phone)}</td><td>${esc(o.delivery_address || o.address)}</td>` : ""}
+    <td>${rs(o.total)}</td><td><span class="badge ${o.status}">${o.status}</span></td><td>${statusSel(o)}</td></tr>`).join("") + "</table>";
+}
+
+async function load(tab) {
+  try {
+    if (tab === "dash") {
+      const [st, list] = await Promise.all([api("/api/admin/stats?period=all"), api("/api/admin/orders")]);
+      $("stOrders").textContent = st.totalOrders; $("stSales").textContent = rs(st.totalSales);
+      $("stCust").textContent = st.customers;
+      $("recent").innerHTML = ordersTable(list.slice(0, 5), false); wireStatus($("recent"));
+      $("popular").innerHTML = st.popular.length ? st.popular.map(p => `<div><span>${esc(p.emoji)}</span>${esc(p.name)}<br>${p.sold} sold</div>`).join("") : '<div class="empty">No sales yet.</div>';
+    } else if (tab === "prod") {
+      const list = await api("/api/products?all=1");
+      $("plist").innerHTML = `<table><tr><th></th><th>Name</th><th>Price</th><th>Status</th><th>Action</th></tr>` + list.map(p => `
+        <tr><td style="font-size:26px">${esc(p.emoji)}</td><td><input data-f="name" data-id="${p.id}" value="${esc(p.name)}"></td>
+        <td><input data-f="price" data-id="${p.id}" value="${p.price}" style="width:90px"></td>
+        <td>${p.active ? "Active" : "Hidden"}</td>
+        <td><button class="btn sm saveP" data-id="${p.id}" data-e="${esc(p.emoji)}" data-d="${esc(p.description)}" data-a="${p.active}">Save</button>
+        <button class="btn sm ghost togP" data-id="${p.id}" data-e="${esc(p.emoji)}" data-d="${esc(p.description)}" data-a="${p.active}">${p.active ? "Hide" : "Show"}</button></td></tr>`).join("") + "</table>";
+      const body = (b, active) => { const id = b.dataset.id;
+        return {name: document.querySelector(`[data-f=name][data-id="${id}"]`).value, price: Number(document.querySelector(`[data-f=price][data-id="${id}"]`).value),
+                emoji: b.dataset.e, description: b.dataset.d, active}; };
+      document.querySelectorAll(".saveP").forEach(b => b.onclick = async () => { try { await post("/api/admin/products/" + b.dataset.id, body(b, b.dataset.a === "1"), "PUT"); toast("Saved"); load("prod"); } catch (e) { toast(e.message); } });
+      document.querySelectorAll(".togP").forEach(b => b.onclick = async () => { try { await post("/api/admin/products/" + b.dataset.id, body(b, b.dataset.a !== "1"), "PUT"); load("prod"); } catch (e) { toast(e.message); } });
+    } else if (tab === "ord") {
+      orders = await api("/api/admin/orders"); $("orders").innerHTML = ordersTable(orders, true); wireStatus($("orders"));
+    } else if (tab === "rep") {
+      const st = await api("/api/admin/stats?period=" + $("period").value);
+      $("rSales").textContent = rs(st.totalSales); $("rCount").textContent = st.periodOrders;
+      $("rtable").innerHTML = st.byProduct.length ? `<table><tr><th>Gift</th><th>Units sold</th><th>Revenue</th></tr>` + st.byProduct.map(p => `<tr><td>${esc(p.name)}</td><td>${p.sold}</td><td>${rs(p.revenue)}</td></tr>`).join("") + "</table>" : '<div class="empty">No sales in this period.</div>';
+    }
+  } catch (e) { if (e.status === 401 || e.status === 403) location.href = "/login.html?next=/admin.html"; else toast(e.message); }
+}
+$("period").onchange = () => load("rep");
+$("addP").onclick = async () => { $("perr").style.display = "none";
+  try { await post("/api/admin/products", {name: $("pn").value, price: Number($("pp").value), emoji: $("pe").value, description: $("pd").value});
+    $("pn").value = $("pp").value = $("pd").value = ""; toast("Product added"); load("prod"); }
+  catch (e) { $("perr").textContent = e.message; $("perr").style.display = "block"; } };
+renderHeader("admin").then(me => { if (!me.loggedIn || me.role !== "admin") location.href = "/login.html?next=/admin.html"; else load("dash"); });
+</script></body></html>

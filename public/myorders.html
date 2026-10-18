@@ -1,0 +1,17 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My Orders</title><link rel="stylesheet" href="/style.css"></head><body>
+<header class="top"></header>
+<main><h2 class="sec">My Orders</h2><div class="panel" style="overflow-x:auto" id="box"><div class="empty">Loading…</div></div></main>
+<script src="/app.js"></script>
+<script>
+(async () => {
+  const me = await renderHeader("orders");
+  if (!me.loggedIn) { location.href = "/login.html?next=/myorders.html"; return; }
+  const list = await api("/api/orders/mine");
+  document.getElementById("box").innerHTML = !list.length ? '<div class="empty">You have no orders yet. <a href="/#products" style="color:var(--maroon)">Browse gifts</a></div>' :
+    `<table><tr><th>Order</th><th>Gift</th><th>Print</th><th>Design</th><th>Photo</th><th>Qty</th><th>Total</th><th>Status</th><th>Date</th></tr>` +
+    list.map(o => `<tr><td>#${String(o.id).padStart(3, "0")}</td><td>${esc(o.product_name)}</td><td>${esc(o.message)}</td><td>${esc(o.design)}</td>
+      <td>${o.photo ? `<img class="photo" src="/uploads/${esc(o.photo)}">` : "–"}</td><td>${o.quantity}</td><td>${rs(o.total)}</td>
+      <td><span class="badge ${esc(o.status)}">${esc(o.status)}</span></td><td>${esc(o.created_at.slice(0, 10))}</td></tr>`).join("") + "</table>";
+})();
+</script></body></html>

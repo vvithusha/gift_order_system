@@ -1,0 +1,73 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Personalize Your Gift</title><link rel="stylesheet" href="/style.css"></head><body>
+<header class="top"></header>
+<main>
+  <div class="panel" style="background:var(--pink)"><h2 style="margin:0;font-size:22px">🎁 Personalize Your Gift</h2>
+    <div style="color:var(--muted);font-size:13px;margin-top:4px">Add your special touch and make it unique!</div></div>
+  <form id="form" novalidate>
+  <div class="row">
+    <div class="panel"><div class="pick"><div class="thumb" id="pEmoji">🎁</div>
+      <div><b id="pName" style="font-size:17px">Loading…</b><div id="pPrice" style="margin-top:6px"></div>
+      <div id="pDesc" style="color:var(--muted);font-size:13px;margin-top:6px"></div>
+      <a href="/#products" style="font-size:13px;color:var(--maroon)">← Choose another gift</a></div></div></div>
+    <div class="panel"><h3>1. Enter Personalization Details</h3>
+      <label>Name / Message to Print <i>*</i></label><input id="message" maxlength="30" placeholder="e.g. Best Mom Ever">
+      <div class="counter"><span id="cnt">0</span>/30</div>
+      <label>Select Design <i>*</i></label>
+      <select id="design"><option>Floral</option><option>Classic</option><option>Modern</option><option>Minimal</option><option>Birthday</option><option>Anniversary</option></select>
+      <label>Upload Photo (optional, JPG/PNG up to 2 MB)</label><input type="file" id="photo" accept="image/jpeg,image/png,image/gif,image/webp">
+      <label>Quantity</label><div class="qty"><button type="button" id="minus">−</button><input id="qty" value="1" inputmode="numeric"><button type="button" class="plus" id="plus">+</button></div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="panel"><h3>2. Customer Details</h3>
+      <label>Full Name <i>*</i></label><input id="full_name" maxlength="60">
+      <label>Phone Number <i>*</i></label><input id="phone" maxlength="20" placeholder="071 234 5678">
+      <label>Address <i>*</i></label><input id="address" maxlength="200">
+      <label>Delivery Address (if different)</label><input id="delivery" maxlength="200" placeholder="Enter delivery address (optional)"></div>
+    <div class="panel"><h3>3. Order Summary</h3>
+      <div class="sum"><span>Product Price</span><span id="sPrice">–</span></div>
+      <div class="sum"><span>Quantity</span><span id="sQty">1</span></div>
+      <div class="sum total"><span>Total Price</span><span id="sTotal">–</span></div>
+      <div class="err" id="err"></div>
+      <button class="btn" style="width:100%;margin-top:18px;padding:14px" id="place">🛒 Place Order</button></div>
+  </div></form>
+  <div class="quote">♥ "Small gifts create big smiles" ♥</div>
+</main>
+<script src="/app.js"></script>
+<script>
+const pid = new URLSearchParams(location.search).get("id");
+let product = null;
+const $ = id => document.getElementById(id);
+function qtyVal() { const n = parseInt($("qty").value, 10); return isNaN(n) ? 1 : Math.min(20, Math.max(1, n)); }
+function refresh() { $("cnt").textContent = [...$("message").value].length; const q = qtyVal(); $("sQty").textContent = q;
+  if (product) { $("sPrice").textContent = rs(product.price); $("sTotal").textContent = rs(product.price * q); } }
+$("message").oninput = refresh; $("qty").oninput = refresh;
+$("qty").onblur = () => { $("qty").value = qtyVal(); refresh(); };
+$("minus").onclick = () => { $("qty").value = Math.max(1, qtyVal() - 1); refresh(); };
+$("plus").onclick = () => { $("qty").value = Math.min(20, qtyVal() + 1); refresh(); };
+
+(async () => {
+  const me = await renderHeader("products");
+  if (!me.loggedIn) { location.href = "/login.html?next=" + encodeURIComponent(location.pathname + location.search); return; }
+  $("full_name").value = me.name; $("phone").value = me.phone || "";
+  try { product = await api("/api/products/" + encodeURIComponent(pid || 0)); }
+  catch (e) { $("pName").textContent = "Gift not found"; $("place").disabled = true; return; }
+  $("pEmoji").textContent = product.emoji; $("pName").textContent = product.name;
+  $("pPrice").textContent = rs(product.price); $("pDesc").textContent = product.description; refresh();
+})();
+
+$("form").onsubmit = async e => {
+  e.preventDefault(); $("err").style.display = "none";
+  const fd = new FormData();
+  fd.append("product_id", pid); fd.append("message", $("message").value); fd.append("design", $("design").value);
+  fd.append("quantity", qtyVal()); fd.append("full_name", $("full_name").value); fd.append("phone", $("phone").value);
+  fd.append("address", $("address").value); fd.append("delivery_address", $("delivery").value);
+  if ($("photo").files[0]) fd.append("photo", $("photo").files[0]);
+  $("place").disabled = true;
+  try { const r = await api("/api/orders", {method: "POST", body: fd});
+    toast("Order #" + r.id + " placed! Total " + rs(r.total)); setTimeout(() => location.href = "/myorders.html", 1200); }
+  catch (x) { $("err").textContent = x.message; $("err").style.display = "block"; $("place").disabled = false;
+    if (x.status === 401) location.href = "/login.html"; }
+};
+</script></body></html>
