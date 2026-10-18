@@ -164,3 +164,4 @@ Something else is already using 8080 (often a previous `giftshop` still running)
 
 **I rebuilt but the shop looks the same.**  
 The running process is the old binary. Stop it, then start `./build/giftshop` again.
+ 
